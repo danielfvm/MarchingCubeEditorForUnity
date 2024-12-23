@@ -1,10 +1,12 @@
 #if UNITY_EDITOR
 
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
 namespace iffnsStuff.MarchingCubeEditor.EditTools
 {
+    [ExecuteInEditMode]
     public abstract class EditShape : MonoBehaviour
     {
         private Matrix4x4 worldToLocalMatrix;
@@ -45,6 +47,42 @@ namespace iffnsStuff.MarchingCubeEditor.EditTools
         /// Material linked to the shape for visualization.
         /// </summary>
         [SerializeField] private Material linkedMaterial;
+
+        readonly List<ShortcutHandler> shortcutHandlers = new List<ShortcutHandler>();
+
+        void OnEnable()
+        {
+            // ToDo: Find better way to set it up once
+            shortcutHandlers.Clear();
+            SetupShortcutHanlders();
+        }
+
+        protected virtual void SetupShortcutHanlders()
+        {
+            shortcutHandlers.Add(new HandleScaleByHoldingSAndScrolling(transform));
+        }
+
+        public void DrawUI()
+        {
+            string helpText = "Controls:\n" +
+                    "Click to add\n" +
+                    "Ctrl Click to subtract";
+
+            foreach(ShortcutHandler handler in shortcutHandlers)
+            {
+                helpText += "\n" + handler.ShortcutText;
+            }
+
+            EditorGUILayout.HelpBox(helpText, MessageType.None);
+        }
+
+        public virtual void HandleSceneUpdate(Event e)
+        {
+            foreach (ShortcutHandler handler in shortcutHandlers)
+            {
+                handler.HandleShortcut(e);
+            }
+        }
 
         public Color Color
         {
