@@ -10,7 +10,6 @@ public class SimpleClickToModifyTool : BaseTool
     bool raycastActive;
     bool RaycastActive
     {
-        get => raycastActive;
         set
         {
             selectedShape.gameObject.SetActive(false);
@@ -48,6 +47,7 @@ public class SimpleClickToModifyTool : BaseTool
             RestoreShapePositionIfAble();
             selectedShape = newSelectedShape;
             SaveShapePositionIfAble();
+            newSelectedShape.Initialize();
         }
 
         if (!newSelectedShape) RestoreShapePositionIfAble();

@@ -48,23 +48,28 @@ namespace iffnsStuff.MarchingCubeEditor.EditTools
         /// </summary>
         [SerializeField] private Material linkedMaterial;
 
-        readonly List<ShortcutHandler> shortcutHandlers = new List<ShortcutHandler>();
+        readonly protected List<ShortcutHandler> shortcutHandlers = new List<ShortcutHandler>();
 
         void OnEnable()
         {
-            // ToDo: Find better way to set it up once
-            shortcutHandlers.Clear();
-            SetupShortcutHanlders();
+            Initialize();
         }
 
-        protected virtual void SetupShortcutHanlders()
+        public virtual void Initialize()
+        {
+            shortcutHandlers.Clear();
+            SetupShortcutHandlers();
+        }
+
+        protected virtual void SetupShortcutHandlers()
         {
             shortcutHandlers.Add(new HandleScaleByHoldingSAndScrolling(transform));
         }
 
-        public void DrawUI()
+        public virtual void DrawUI()
         {
             string helpText = "Controls:\n" +
+                    "Note that the scene has to be active for some of these to work.\n"+
                     "Click to add\n" +
                     "Ctrl Click to subtract";
 
