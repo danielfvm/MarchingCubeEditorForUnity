@@ -33,7 +33,7 @@ public class MarchingCube : MonoBehaviour
     #endregion
 
     public int VoxelCount => gridSize.x * gridSize.y * gridSize.z;
-    public int TriangleBudget => VoxelCount * 15; // Maximum Amount of Triangles. This is probably wrong.
+    public int TriangleBudget => VoxelCount * 5; // Maximum Amount of Triangles. This is probably wrong.
 
     private void OnDestroy() 
     {
@@ -153,7 +153,7 @@ public class MarchingCube : MonoBehaviour
             yield break;
         }
 
-        var indices = indexRequest.GetData<int>();
+        var indices = indexRequest.GetData<uint>();
         colliderMesh.SetIndices(indices, MeshTopology.Triangles, 0);
         meshCollider.sharedMesh = colliderMesh;
         
@@ -176,7 +176,6 @@ public class MarchingCube : MonoBehaviour
         {
             new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
             new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3),
-           // new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.UInt32, 2),
         };
 
         // Vertex/index buffer formats
@@ -191,6 +190,7 @@ public class MarchingCube : MonoBehaviour
         indexBuffer = renderMesh.GetIndexBuffer();
 
         colliderMesh.SetVertexBufferParams(vertexCount, layout);
+        colliderMesh.SetIndexBufferParams(vertexCount, IndexFormat.UInt32);
     }
 }
 
