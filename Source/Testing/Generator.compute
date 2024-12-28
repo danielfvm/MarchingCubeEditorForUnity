@@ -1,0 +1,125 @@
+#include "MarchingCubesTables.cginc"
+
+#pragma kernel MeshReconstruction
+#pragma kernel ClearUnused
+
+// Workaround for the absence of sizeof operator in HLSL
+#define SIZEOF_UINT 4
+#define SIZEOF_FLOAT3 12
+#define SIZEOF_FLOAT2 8
+
+// Uniforms
+uniform uint3 GridSize;
+uniform uint MaxTriangle;
+uniform float IsoSurface;
+uniform bool InvertNormals;
+
+// Large data from CPU
+RWStructuredBuffer<uint> Counter;
+RWStructuredBuffer<uint> InternalCounter;
+StructuredBuffer<float> DataBuffer;
+RWByteAddressBuffer VertexBuffer;
+RWByteAddressBuffer IndexBuffer;
+
+void WriteVertex(uint offset, float3 pos, float3 normal)
+{
+    uint addr_p = offset * SIZEOF_FLOAT3 * 2;
+    uint addr_n = addr_p + SIZEOF_FLOAT3;
+    VertexBuffer.Store3(addr_p, asuint(pos));
+    VertexBuffer.Store3(addr_n, asuint(normal));
+}
+
+void WriteIndices(uint offset, uint3 indices)
+{
+    IndexBuffer.Store3(offset * SIZEOF_UINT, indices);
+}
+
+float SampleAt(uint x, uint y, uint z)
+{
+    // Check if coord is outside of bounds
+    if (x < 0 || y < 0 || z < 0 || x >= GridSize.x || y >= GridSize.y || z >= GridSize.z)
+        return -1;
+    return DataBuffer[(z * GridSize.y + y) * GridSize.x + x];
+}
+
+float4 SampleWithGradientAt(uint3 i)
+{
+    uint3 i_n = max(i, 1) - 1;
+    uint3 i_p = min(i + 1, GridSize - 1);
+
+    float v = SampleAt(i.x, i.y, i.z);
+    float v_nx = SampleAt(i_n.x, i.y, i.z);
+    float v_px = SampleAt(i_p.x, i.y, i.z);
+    float v_ny = SampleAt(i.x, i_n.y, i.z);
+    float v_py = SampleAt(i.x, i_p.y, i.z);
+    float v_nz = SampleAt(i.x, i.y, i_n.z);
+    float v_pz = SampleAt(i.x, i.y, i_p.z);
+    return float4(v_px - v_nx, v_py - v_ny, v_pz - v_nz, v);
+}
+
+[numthreads(1, 1, 1)]
+void MeshReconstruction(uint3 id : SV_DispatchThreadID)
+{
+    float4 samples[8];
+    int i;
+
+    for (i = 0; i < 8; i++)
+        samples[i] = SampleWithGradientAt(id + CornerPositions[i]);
+        
+    // Determine cube configuration based on corner weights
+    uint cubeIndex = 0;
+    for (i = 0; i < 8; i++)
+        cubeIndex |= (samples[i].w > IsoSurface) << i;
+
+    // Skip if the cube is entirely inside or outside the surface
+    if (cubeIndex == 0 || cubeIndex == 0xFF)
+        return;
+
+    float3 vertices[12];
+    float3 normals[12];
+
+    for (i = 0; i < 12; i++)
+    {
+        int cornerA = EdgeToCornersA[i];
+        int cornerB = EdgeToCornersB[i];
+
+        float4 s1 = samples[cornerA];
+        float4 s2 = samples[cornerB];
+
+        float param = (IsoSurface - s1.w) / (s2.w - s1.w);
+        vertices[i] = (id + lerp(CornerPositions[cornerA], CornerPositions[cornerB], param)) / GridSize;
+        normals[i] = -normalize(lerp(s1.xyz, s2.xyz, param));
+    }
+
+    for (i = 0; TriTable[cubeIndex][i] != -1; i += 3)
+    {
+        uint e1 = TriTable[cubeIndex][i];
+        uint e2 = TriTable[cubeIndex][i + 1];
+        uint e3 = TriTable[cubeIndex][i + 2];
+
+        InterlockedAdd(Counter[0], 1);
+        uint count = InternalCounter.IncrementCounter();
+        if (count >= MaxTriangle) return;
+
+        uint vidx = count * 3;
+        WriteVertex(vidx + !InvertNormals, vertices[e1], normals[e1]);
+        WriteVertex(vidx + InvertNormals, vertices[e2], normals[e2]);
+        WriteVertex(vidx + 2, vertices[e3], normals[e3]);
+        WriteIndices(vidx, uint3(vidx, vidx + 1, vidx + 2));
+    } 
+}
+
+[numthreads(64, 1, 1)]
+void ClearUnused(uint id : SV_DispatchThreadID)
+{
+    while (true)
+    {
+        uint count = InternalCounter.IncrementCounter();
+        if (count >= MaxTriangle) break;
+        uint vidx = count * 3;
+        WriteVertex(vidx + 0, 0, 0);
+        WriteVertex(vidx + 1, 0, 0);
+        WriteVertex(vidx + 2, 0, 0);
+        WriteIndices(vidx, 0);
+    }
+}
